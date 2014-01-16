@@ -11,7 +11,9 @@ from matplotlib import pylab
 import sys, os
 
 
-def kMC():
+#Python programmers use to underscore_separator convention usually
+#unlike java / c++ programmers which use a newCapitalLetter convention
+def kMC_main():
     "Do something"
 
 
@@ -32,4 +34,4 @@ def kMC():
 #An if-test that executes the kMC function if and only if it is used 
 #through this scope (to avoid it lauching if included in another file)
 if __name__=="__main__":
-    kMC()       
+    kMC_main()       

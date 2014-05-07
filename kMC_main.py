@@ -1,6 +1,7 @@
 #Include numerical python methods, keeping the 'np' namespace 
 #to avoid conflicts in names
 import numpy as np
+from np_utils import find
 
 #Include plot tools (e.g. pylab.plot(x, y, .....))
 #Again, we keep the namespace (if not we can't make a function called e.g. 'plot')
@@ -72,7 +73,7 @@ class kMC:
 #        for i, z_i in enumerate(z):
 #            self.z[i] = int((z.min() + z_i/dz)*init_height)
             
-        self.inert_surface_loc = self.z.max()*1.1
+        self.inert_surface_loc = self.z.max()*1.5
         
     
     def save_data(self):
@@ -262,27 +263,19 @@ class kMC:
         cycle = 1
         
         while cycle <= n_c:
-    
-            R_tot = 0    
-            for i, R_i in enumerate(self.R.flatten()):
-                
-                R_tot += R_i
-    
-                self.accu_all_rates[i] = R_tot
-                
-            dart_hit = R_tot*np.random.uniform()
             
+            self.accu_all_rates = np.cumsum(self.R.flatten())
+            
+            R_tot = self.accu_all_rates[-1]
+            
+            dart_hit = R_tot*np.random.uniform()
+
             R_tot = 0  
             choice = None
             
-            for i, R_i in enumerate(self.R.flatten()):
-            
-                R_tot += R_i
-        
-                if (R_tot >= dart_hit):
-                    choice = i
-                    break
-            
+            result = find(self.accu_all_rates, lambda x : x >= dart_hit)
+            (choice,), val = next(result)
+
             x_i = choice/2
             dx  = 2*(choice%2) - 1
             

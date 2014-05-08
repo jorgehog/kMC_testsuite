@@ -26,8 +26,8 @@ class kMC:
     accu_all_rates = None
     
     E0_p = 1
-    E0_v = 1
-    E0_s = -1
+    E0_v = 0
+    E0_s = 0
     
     alpha_p = 1
     alpha_v = 1      
@@ -55,16 +55,20 @@ class kMC:
         self.init_surface(init_height)
         
         
-        self.E_vertical_saddle_single = self.E0_p/((sqrt(5)/2)**self.alpha_p)                
+        self.E_saddle_single = self.E0_p/((sqrt(5)/2)**self.alpha_p)                
         
         
         self.get_all_energies();
         self.get_all_rates();
+        
+        self.save_data();
     
     
     def init_surface(self, init_height):
         
         self.z += init_height/2
+        self.z[self.system_size/2] = init_height/2-1
+
         
 #        z = 0.25*np.sin(2*pi*self.x/(self.system_size/3)) + 0.5
 #        z[-1] = self.z[0] #Force initial periodicity
@@ -123,26 +127,30 @@ class kMC:
         
         vertical_path = dz_r + 1
         
-        R = 1 #rate of sliding on surface is always one.
+        R = 1 
         
         E_i = self.E[x_i]
         
         if vertical_path != 0:
+            
+            n = 0
         
             if (dz_r > 0):
                 
-                #Move upwards dz_r times.
-                for i in xrange(dz_r):
+                #Move upwards dz_r + 1 times.
+                for i in xrange(dz_r + 1):
                         
                     E_saddle = self.eval_vertical_saddlepoint(dz_r - i, dz_l - i)      
-        
+                    
                     R *= self.get_specific_rate(E_i, E_saddle)
                     
                     self.z[x_i] = z_i + i + 1
-                    E_i = self.get_energy(x_i) - self.E0_p #subtract the bottom connector.
+                    E_i = self.get_energy(x_i, connected_bottom = False)
+                    
+                    n += 1
                 
                 #Then we slide across the top.
-                R *= self.get_specific_rate(E_i, self.E_vertical_saddle_single) #Rate of sliding over kink
+                R *= self.get_specific_rate(E_i, self.E_saddle_single) #Rate of sliding over kink
             
                 self.z[x_i] = z_i
                 
@@ -150,7 +158,7 @@ class kMC:
             else:
                 
                 #First we slide across the kink
-                R *= self.get_specific_rate(E_i, self.E_vertical_saddle_single) #Rate of sliding over kink
+                R *= self.get_specific_rate(E_i, self.E_saddle_single) #Rate of sliding over kink
                 
                 self.z[x_i] = z_i - 1      
                 
@@ -169,11 +177,19 @@ class kMC:
                     #The first time the left difference is -1, then each height increase by 1 each cycle.
                     E_saddle = self.eval_vertical_saddlepoint(dz_rr + dz_r + i, i - 1)
                 
-                    R *= self.get_specific_rate(E_i, E_saddle)                    
+                    R *= self.get_specific_rate(E_i, E_saddle)    
+                    
+                    n += 1
                     
                 self.z[x_i] = z_i
                 self.z[x_r] = z_r
                 
+            R *= n
+
+        else:
+            
+            R *= self.get_specific_rate(E_i, 2*self.E_saddle_single)
+            
         return R
        
        
@@ -182,15 +198,15 @@ class kMC:
         E_saddle = 0
         
         if (dz_r >= 1):
-            E_saddle += 2*self.E_vertical_saddle_single
+            E_saddle += 2*self.E_saddle_single
         elif (dz_r == 0):
-            E_saddle += self.E_vertical_saddle_single
+            E_saddle += self.E_saddle_single
             
             
         if (dz_l >= 1):
-            E_saddle += 2*self.E_vertical_saddle_single
+            E_saddle += 2*self.E_saddle_single
         elif (dz_l == 0):
-            E_saddle += self.E_vertical_saddle_single
+            E_saddle += self.E_saddle_single
         
         return E_saddle
                
@@ -200,25 +216,41 @@ class kMC:
         return exp(-self.beta*(E - E_saddle))
     
     
-    def get_energy(self, x_i):
+    def get_energy(self, x_i, connected_bottom = True):
             
         E_i = 0
         
         z_i = self.z[x_i]
         
+        #No particle present. Optimally should never happen
+        if z_i == 0:
+            print "Warning: Depleted layers."
+            return 0
+            
+            
         #Particle-particle electro-static contribution
-        if z_i != 0:
-            
+
+        if connected_bottom:        
             E_i += self.E0_p
-            
-            z_im = self.z[(x_i - 1)%self.system_size]
-            z_ip = self.z[(x_i + 1)%self.system_size]
-            
-            if (z_im >= z_i):
-                E_i += self.E0_p
-            if (z_ip >= z_i):
-                E_i += self.E0_p
-            
+        
+        z_im = self.z[(x_i - 1)%self.system_size]
+        z_ip = self.z[(x_i + 1)%self.system_size]
+        
+        #left neighbors
+        if (z_im > z_i):
+            E_i += self.E0_p + 2*self.E0_p/sqrt(2) #two diags and one direct
+        elif z_im == z_i:
+            E_i += self.E0_p + self.E0_p/sqrt(2)   #two diags and one direct
+        elif z_im == z_i - 1:
+            E_i += self.E0_p/sqrt(2)               #one diag
+
+        #right neighbors
+        if (z_ip > z_i):
+            E_i += self.E0_p + 2*self.E0_p/sqrt(2) #two diags and one direct
+        elif z_ip == z_i:
+            E_i += self.E0_p + self.E0_p/sqrt(2)   #two diags and one direct
+        elif z_ip == z_i - 1:
+            E_i += self.E0_p/sqrt(2)               #one diag
         
         #Particle-inert surface electro-static contribution                        
                 
@@ -281,9 +313,11 @@ class kMC:
             
             self.move_particle(x_i, (x_i + dx)%self.system_size)
             
-            if (cycle%1000) == 0:
+            if ((cycle-1)%1) == 0:
                 self.save_data()
                 print "cycle", cycle, "/", n_c
+                print val
+                raw_input()
             
             cycle += 1
         
@@ -295,11 +329,11 @@ class kMC:
 #through this scope (to avoid it lauching if included in another file)
 if __name__=="__main__":
     
-    system_size = 1000
-    temperature = 1.0
-    init_height = 10
+    system_size = 10
+    temperature = 0.8
+    init_height = 100
     r_0         = 1 
-    n_c         = 100000
+    n_c         = 1000
 
     solver = kMC(system_size, temperature, init_height, r_0)
     solver.run(n_c)

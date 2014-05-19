@@ -26,24 +26,21 @@ class kMC:
     accu_all_rates = None
     
     E0_p = 1
-    E0_v = 0
-    E0_s = 0
+    E0_v = 1
+    E0_s = -10
     
     alpha_p = 1
     alpha_v = 1      
-    r_0 = None #length constant stress
+    r_0 = 0.3 #length constant stress
     
-    system_size = None    
+    system_size = 10000    
     inert_surface_loc = None
-    beta = None
+    beta = 1.0
     
     
-    def __init__(self, size, T, init_height, r_0):
+    def __init__(self, init_height):
         
-        self.system_size = size
-        self.beta = 1./T
-        self.r_0 = r_0
-    
+        size = self.system_size 
         
         self.x = np.arange(size) #0, 1, 2, 3, 4 ... 
         self.z = np.zeros(size, dtype=int)
@@ -77,7 +74,7 @@ class kMC:
 #        for i, z_i in enumerate(z):
 #            self.z[i] = int((z.min() + z_i/dz)*init_height)
             
-        self.inert_surface_loc = self.z.max()*1.5
+        self.inert_surface_loc = self.z.max() + 10
         
     
     def save_data(self):
@@ -140,7 +137,7 @@ class kMC:
                 #Move upwards dz_r + 1 times.
                 for i in xrange(dz_r + 1):
                         
-                    E_saddle = self.eval_vertical_saddlepoint(dz_r - i, dz_l - i)      
+                    E_saddle = self.eval_vertical_saddlepoint(dz_r - i, dz_l - i, self.z[x_i] + 0.5)      
                     
                     R *= self.get_specific_rate(E_i, E_saddle)
                     
@@ -175,7 +172,7 @@ class kMC:
                     
                     #Since we moved the particle to the right, dz_rr is shortened by dz_r.
                     #The first time the left difference is -1, then each height increase by 1 each cycle.
-                    E_saddle = self.eval_vertical_saddlepoint(dz_rr + dz_r + i, i - 1)
+                    E_saddle = self.eval_vertical_saddlepoint(dz_rr + dz_r + i, i - 1, self.z[x_r] - 0.5)
                 
                     R *= self.get_specific_rate(E_i, E_saddle)    
                     
@@ -193,7 +190,7 @@ class kMC:
         return R
        
        
-    def eval_vertical_saddlepoint(self, dz_r, dz_l):
+    def eval_vertical_saddlepoint(self, dz_r, dz_l, saddle_loc):
 
         E_saddle = 0
         
@@ -207,6 +204,19 @@ class kMC:
             E_saddle += 2*self.E_saddle_single
         elif (dz_l == 0):
             E_saddle += self.E_saddle_single
+            
+
+        #Particle-inert surface electro-static contribution                        
+                
+        E0_pv = sqrt(self.E0_p*self.E0_v)
+        alpha_pv = 0.5*(self.alpha_p + self.alpha_v)
+        h = self.inert_surface_loc - saddle_loc
+        
+        E_saddle += E0_pv/h**alpha_pv
+                
+                
+        #Particle mechanical stress energy contribution      
+        E_saddle += self.E0_s*exp(-h/self.r_0)
         
         return E_saddle
                
@@ -255,9 +265,10 @@ class kMC:
         #Particle-inert surface electro-static contribution                        
                 
         E0_pv = sqrt(self.E0_p*self.E0_v)
+        alpha_pv = 0.5*(self.alpha_p + self.alpha_v)
         h = self.inert_surface_loc - z_i
         
-        E_i += E0_pv/h
+        E_i += E0_pv/h**alpha_pv
                 
                 
         #Particle mechanical stress energy contribution      
@@ -313,11 +324,10 @@ class kMC:
             
             self.move_particle(x_i, (x_i + dx)%self.system_size)
             
-            if ((cycle-1)%1) == 0:
+            if ((cycle-1)%1000) == 0:
                 self.save_data()
                 print "cycle", cycle, "/", n_c
-                print val
-                raw_input()
+           
             
             cycle += 1
         
@@ -328,14 +338,11 @@ class kMC:
 #An if-test that executes the kMC function if and only if it is used 
 #through this scope (to avoid it lauching if included in another file)
 if __name__=="__main__":
-    
-    system_size = 10
-    temperature = 0.8
+        
     init_height = 100
-    r_0         = 1 
-    n_c         = 1000
+    n_c         = 1000000
 
-    solver = kMC(system_size, temperature, init_height, r_0)
+    solver = kMC(init_height)
     solver.run(n_c)
 
         
